@@ -1,0 +1,15 @@
+global:
+  resolve_timeout: 5m
+
+route:
+  group_by: ['alertname', 'service']
+  group_wait: 5s
+  group_interval: 5s
+  repeat_interval: 10m
+  receiver: 'healer-webhook'
+
+receivers:
+- name: 'healer-webhook'
+  webhook_configs:
+  - url: 'http://healer:8000/webhook/alert'
+    send_resolved: true

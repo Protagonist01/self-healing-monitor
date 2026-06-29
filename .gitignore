@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+
+chroma_db/
+healer_audit.db
+evals/results/
+
+node_modules/
+dist/
+dashboard/dist/
+dashboard/node_modules/
+
+.env
+.DS_Store

@@ -1,0 +1,133 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: healer
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  loki:
+    image: grafana/loki:2.9.0
+    container_name: loki
+    ports:
+      - "3100:3100"
+    command: -config.file=/etc/loki/local-config.yaml
+    volumes:
+      - ./loki/loki-config.yaml:/etc/loki/local-config.yaml
+
+  prometheus:
+    image: prom/prometheus:v2.45.0
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./prometheus/alert_rules.yml:/etc/prometheus/alert_rules.yml
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+
+  grafana:
+    image: grafana/grafana:10.4.2
+    container_name: grafana
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - ./grafana/dashboard.json:/var/lib/grafana/dashboards/self-healing-monitor.json:ro
+    depends_on:
+      - prometheus
+
+  alertmanager:
+    image: prom/alertmanager:v0.25.0
+    container_name: alertmanager
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./prometheus/alertmanager.yml:/etc/alertmanager/alertmanager.yml
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+
+  leaky_service:
+    build:
+      context: ../demo_services/leaky_service
+      dockerfile: Dockerfile
+    container_name: leaky_service
+    ports:
+      - "8080:8080"
+    deploy:
+      resources:
+        limits:
+          memory: 80M
+    labels:
+      service: leaky_service
+
+  flaky_service:
+    build:
+      context: ../demo_services/flaky_service
+      dockerfile: Dockerfile
+    container_name: flaky_service
+    ports:
+      - "8081:8081"
+    labels:
+      service: flaky_service
+
+  healer:
+    build:
+      context: ../healer
+      dockerfile: Dockerfile
+    container_name: healer
+    ports:
+      - "8000:8000"
+    environment:
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - OPENROUTER_MODEL=${OPENROUTER_MODEL:-google/gemini-2.5-flash}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/healer
+      - PROMETHEUS_URL=http://prometheus:9090
+      - LOKI_URL=http://loki:3100
+      - CHROMA_DB_DIR=/app/chroma_db
+      - RUNBOOKS_DIR=/app/runbooks
+      - REQUIRE_HUMAN_APPROVAL=${REQUIRE_HUMAN_APPROVAL:-False}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - healer_chroma_db:/app/chroma_db
+      - ./runbooks:/app/runbooks:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      prometheus:
+        condition: service_started
+      loki:
+        condition: service_started
+
+  dashboard:
+    build:
+      context: ../dashboard
+      dockerfile: Dockerfile
+    container_name: dashboard
+    ports:
+      - "3000:80"
+    environment:
+      - VITE_HEALER_API_URL=http://localhost:8000
+    depends_on:
+      - healer
+
+volumes:
+  pgdata:
+  healer_chroma_db:

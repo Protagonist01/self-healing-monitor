@@ -1,0 +1,4 @@
+{"id":"high-memory-leaky-service","alert_name":"HighMemoryUsage","service":"leaky_service","root_cause":"OOMKilled after memory leak in request handler","confidence":0.86,"expected_action":"RESTART_CONTAINER","expected_policy":"auto_execute"}
+{"id":"flaky-service-500s","alert_name":"HighErrorRate","service":"flaky_service","root_cause":"Recent code bug causing HTTP 500 exceptions","confidence":0.88,"expected_action":"ROLLBACK_DEPLOY","expected_policy":"human_approval"}
+{"id":"traffic-spike","alert_name":"HighLatency","service":"gateway","root_cause":"Traffic spike increased request load","confidence":0.80,"expected_action":"SCALE_REPLICAS","expected_policy":"human_approval"}
+{"id":"ambiguous-low-confidence","alert_name":"ServiceDegraded","service":"worker","root_cause":"Ambiguous behavior with weak signal","confidence":0.55,"expected_action":"RESTART_CONTAINER","expected_policy":"human_approval"}

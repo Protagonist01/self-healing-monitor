@@ -1,0 +1,32 @@
+groups:
+  - name: self-healing-alerts
+    rules:
+      - alert: HighMemoryUsage
+        expr: container_memory_working_set_bytes{container="leaky_service"} > 60000000
+        for: 10s
+        labels:
+          severity: warning
+          service: leaky_service
+        annotations:
+          summary: "leaky_service memory usage is very high"
+          description: "Container leaky_service has been consuming more than 60MB of memory for 10s."
+
+      - alert: HighErrorRate
+        expr: rate(http_requests_total{status="500", service="flaky_service"}[1m]) > 0.1
+        for: 10s
+        labels:
+          severity: warning
+          service: flaky_service
+        annotations:
+          summary: "flaky_service error rate is high"
+          description: "flaky_service is returning high rate of 500 responses."
+
+      - alert: ServiceDown
+        expr: up{job="leaky_service"} == 0 or up{job="flaky_service"} == 0
+        for: 5s
+        labels:
+          severity: critical
+          service: leaky_service
+        annotations:
+          summary: "Service target is down"
+          description: "Microservice target container is unreachable."
