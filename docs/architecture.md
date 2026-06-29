@@ -11,9 +11,9 @@ flowchart TD
   context --> diagnose["Diagnosis"]
   diagnose --> planner["Action planner"]
   planner --> gate["Policy gate"]
-  gate -->|safe auto action| exec["Executor"]
-  gate -->|needs approval| queue["Approval queue"]
-  exec -->|failure and retry_count = 0| retry["Prepare retry"]
+  gate --> exec["Executor"]
+  gate --> queue["Approval queue"]
+  exec --> retry["Prepare retry"]
   retry --> exec
   exec --> audit["Audit log"]
   queue --> audit

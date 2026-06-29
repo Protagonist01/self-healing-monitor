@@ -65,16 +65,16 @@ This project is an exploration of **agentic AI safety applied to a real SRE prob
 ```mermaid
 flowchart TD
   alert["Prometheus alert"] --> am["Alertmanager"]
-  am --> api["Healer FastAPI\n/webhook/alert"]
-  api --> context["Context Gather\nmetrics · logs · deploys · runbook"]
-  context --> diagnose["LLM Diagnosis\nOpenRouter · confidence score"]
-  diagnose --> planner["Action Planner\nranked by risk"]
-  planner --> gate["Policy Gate\n4 safety checks"]
-  gate -->|"confident + safe"| exec["Executor\nDocker · k8s stub"]
-  gate -->|"needs review"| queue["Human Approval\nqueue"]
-  exec --> audit["Audit Log\nPostgreSQL JSONB"]
+  am --> api["Healer FastAPI webhook"]
+  api --> context["Context gather"]
+  context --> diagnose["LLM diagnosis"]
+  diagnose --> planner["Action planner"]
+  planner --> gate["Policy gate"]
+  gate --> exec["Executor"]
+  gate --> queue["Human approval queue"]
+  exec --> audit["Audit log"]
   queue --> audit
-  audit --> dashboard["React Dashboard\nevent feed · audit · approvals"]
+  audit --> dashboard["React dashboard"]
 ```
 
 ### The Policy Gate — Four Conditions for Autonomous Execution
