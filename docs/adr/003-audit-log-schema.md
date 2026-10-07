@@ -63,8 +63,14 @@ Each audit record is a single JSON document with this structure:
     "completed_at": "ISO8601",
     "duration_seconds": 3.2,
     "output": "Container payment-service restarted successfully",
-    "alert_resolved": true,
-    "resolution_confirmed_at": "ISO8601"
+    "alert_resolved": true
+  },
+  "verification": {
+    "verified": true,
+    "alert_still_firing": false,
+    "metrics_after_action": "Current value: 0",
+    "checked_at": "ISO8601",
+    "method": "prometheus_query"
   },
   "total_duration_seconds": 9.7
 }
@@ -107,6 +113,6 @@ The `record` JSONB column stores the full document. Scalar columns are duplicate
 The value of the audit log is answering "why" — not just "what". Storing the full context, diagnosis text, confidence score, and policy gate check breakdown means post-mortems have the complete picture. The storage cost (a few KB per incident) is negligible.
 
 **Trade-offs:**
-- JSONB schema evolution is permissive — a bug could write malformed records that are hard to query. Mitigated by a Pydantic `AuditRecord` model that validates every record before write
-- Duplicate scalar columns and JSONB creates a consistency risk if the write code diverges. Mitigated by a single `audit_logger.py` function as the only write path — never write directly to the table elsewhere
+- JSONB schema evolution is permissive. The logger constructs records from typed workflow state; no runtime Pydantic `AuditRecord` model validates every write. Tests cover the persisted shape.
+- Duplicate scalar columns and JSONB create a consistency risk. `healer/src/audit/logger.py` constructs both in one write path.
 - PostgreSQL adds an operational dependency. For simpler deployments, the `AUDIT_BACKEND=sqlite` env var switches to a local SQLite file — documented in `docs/setup.md`

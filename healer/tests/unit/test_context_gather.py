@@ -13,7 +13,7 @@ class FakeIndexer:
         return [
             {
                 "metadata": {"source": "high_memory.md"},
-                "document": "Runbook: high_memory.md\nContent:\nRestart the container."
+                "document": "Runbook: high_memory.md\nContent:\nRestart the container.",
             }
         ]
 

@@ -19,10 +19,14 @@ scrape_configs:
   - job_name: "leaky_service"
     static_configs:
       - targets: ["leaky_service:8080"]
+        labels:
+          service: leaky_service
 
   - job_name: "flaky_service"
     static_configs:
       - targets: ["flaky_service:8081"]
+        labels:
+          service: flaky_service
 
   - job_name: "healer"
     static_configs:

@@ -9,7 +9,7 @@ make eval
 or:
 
 ```powershell
-.\healer\.venv\Scripts\python.exe evals\run_evals.py
+python evals/run_evals.py
 ```
 
 The runner reads `evals/scenarios.jsonl`, passes each fixture through the action planner and policy gate, and writes `evals/results/latest.json`.
@@ -30,3 +30,10 @@ Append a JSON line to `evals/scenarios.jsonl`:
 ```
 
 Live LLM quality should be evaluated separately by capturing real incident outputs and adding them as fixtures after review.
+
+The fixtures supply diagnoses directly and make no provider calls. The runner fixes
+policy settings independently of `.env`. These four examples are a small regression
+set, not proof of calibrated confidence, general diagnosis accuracy, or performance
+on production incidents. Before enabling autonomous repairs, collect human-reviewed
+incidents covering missing telemetry, ambiguity, service-down and cascading failures.
+Measure incorrect-action rate and false recovery claims alongside diagnosis quality.

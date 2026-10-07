@@ -1,6 +1,6 @@
-from typing import Dict, Any
 from healer.src.config import settings
-from healer.src.agent.state import HealerState, PolicyGateDecision
+from healer.src.agent.state import HealerState
+
 
 def policy_gate_node(state: HealerState) -> HealerState:
     """
@@ -20,9 +20,7 @@ def policy_gate_node(state: HealerState) -> HealerState:
         # Fallback to human approval or notify only if state is missing
         state["policy_gate"] = {
             "decision": "human_approval",
-            "checks": {
-                "error": "Missing diagnosis or selected action"
-            }
+            "checks": {"error": "Missing diagnosis or selected action"},
         }
         return state
 
@@ -30,34 +28,29 @@ def policy_gate_node(state: HealerState) -> HealerState:
     confidence_threshold = settings.CONFIDENCE_THRESHOLD
 
     # Find the impact level of the selected action from the action plan
-    impact = "low"
+    impact = "high"
     for item in action_plan:
         if item["action"] == selected_action:
             impact = item["impact"]
             break
 
     # Check 1: Confidence
-    confidence_passed = confidence >= confidence_threshold
-    
+    confidence_passed = 0 <= confidence <= 1 and confidence >= confidence_threshold
+
     # Check 2: Action Allowlist
     allowlist_passed = selected_action in settings.allowed_actions_set
-    
+
     # Check 3: Impact level (High impact always requires human approval)
-    impact_passed = impact.lower() != "high"
-    
+    impact_passed = impact.lower() == "low"
+
     # Check 4: Global override (Require human approval)
     override_passed = not settings.REQUIRE_HUMAN_APPROVAL
 
     # Overall outcome
-    all_checks_passed = (
-        confidence_passed and 
-        allowlist_passed and 
-        impact_passed and 
-        override_passed
-    )
+    all_checks_passed = confidence_passed and allowlist_passed and impact_passed and override_passed
 
     decision = "auto_execute" if all_checks_passed else "human_approval"
-    
+
     # If the action itself is just NOTIFY_ONLY, we don't need human approval to send a notification
     if selected_action == "NOTIFY_ONLY":
         decision = "notify_only"
@@ -68,22 +61,19 @@ def policy_gate_node(state: HealerState) -> HealerState:
             "confidence_threshold": {
                 "passed": confidence_passed,
                 "value": confidence,
-                "threshold": confidence_threshold
+                "threshold": confidence_threshold,
             },
             "allowlist": {
                 "passed": allowlist_passed,
                 "action": selected_action,
-                "allowed": list(settings.allowed_actions_set)
+                "allowed": list(settings.allowed_actions_set),
             },
-            "impact_level": {
-                "passed": impact_passed,
-                "level": impact
-            },
+            "impact_level": {"passed": impact_passed, "level": impact},
             "override_flag": {
                 "passed": override_passed,
-                "require_human": settings.REQUIRE_HUMAN_APPROVAL
-            }
-        }
+                "require_human": settings.REQUIRE_HUMAN_APPROVAL,
+            },
+        },
     }
 
     return state

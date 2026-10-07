@@ -12,7 +12,9 @@ from healer.src.rag.runbook_indexer import indexer
 def main():
     parser = argparse.ArgumentParser(description="Index and query healer runbooks.")
     parser.add_argument("--query", default="", help="Optional query to test retrieval.")
-    parser.add_argument("--force", action="store_true", help="Force reindex even when hashes match.")
+    parser.add_argument(
+        "--force", action="store_true", help="Force reindex even when hashes match."
+    )
     parser.add_argument("--limit", type=int, default=3, help="Number of matches to show.")
     args = parser.parse_args()
 

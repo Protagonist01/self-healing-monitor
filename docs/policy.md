@@ -10,8 +10,8 @@ All of these checks must pass before the healer auto-executes an action:
 | --- | --- |
 | Confidence threshold | `confidence >= 0.75` |
 | Action allowlist | `RESTART_CONTAINER`, `NOTIFY_ONLY` |
-| Impact level | anything marked `high` requires human approval |
-| Global override | `REQUIRE_HUMAN_APPROVAL=false` |
+| Impact level | only explicit `low` impact can auto-execute |
+| Global override | `REQUIRE_HUMAN_APPROVAL=true` (operator approval required) |
 
 `NOTIFY_ONLY` is always allowed because it does not change infrastructure.
 
@@ -19,9 +19,9 @@ All of these checks must pass before the healer auto-executes an action:
 
 | Action | Impact | Default route |
 | --- | --- | --- |
-| `RESTART_CONTAINER` | low | auto when confidence passes |
+| `RESTART_CONTAINER` | low | human approval by default |
 | `NOTIFY_ONLY` | low | auto |
-| `SCALE_REPLICAS` | medium | human approval unless allowlisted |
+| `SCALE_REPLICAS` | medium | human approval; unsupported on Docker |
 | `ROLLBACK_DEPLOY` | high | human approval |
 
 ## Tuning
@@ -34,7 +34,7 @@ ALLOWED_AUTO_ACTIONS=["RESTART_CONTAINER","NOTIFY_ONLY"]
 REQUIRE_HUMAN_APPROVAL=false
 ```
 
-Set `REQUIRE_HUMAN_APPROVAL=true` for first deployment or demos where you want every action reviewed.
+Human approval is enabled by default. The example above explicitly enables autonomous repairs. Notification-only actions bypass approval because they cannot modify infrastructure. Docker scaling and rollback remain unsupported even after approval.
 
 ## Audit Requirements
 

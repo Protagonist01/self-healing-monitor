@@ -12,4 +12,8 @@ receivers:
 - name: 'healer-webhook'
   webhook_configs:
   - url: 'http://healer:8000/webhook/alert'
+    http_config:
+      authorization:
+        type: Bearer
+        credentials_file: /run/secrets/healer_api_key
     send_resolved: true

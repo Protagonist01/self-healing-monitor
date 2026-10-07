@@ -1,6 +1,13 @@
 import json
 import sys
 from pathlib import Path
+import os
+
+# Evaluation fixtures have a fixed policy, independent of the operator's .env.
+os.environ["ENVIRONMENT"] = "development"
+os.environ["REQUIRE_HUMAN_APPROVAL"] = "false"
+os.environ["CONFIDENCE_THRESHOLD"] = "0.75"
+os.environ["ALLOWED_AUTO_ACTIONS"] = '["RESTART_CONTAINER","NOTIFY_ONLY"]'
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -43,7 +50,11 @@ def make_state(scenario):
 
 
 def main():
-    scenarios = [json.loads(line) for line in SCENARIOS.read_text(encoding="utf-8").splitlines() if line.strip()]
+    scenarios = [
+        json.loads(line)
+        for line in SCENARIOS.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
     results = []
 
     for scenario in scenarios:
@@ -78,7 +89,8 @@ def main():
     print(f"Action accuracy: {action_accuracy:.0%}")
     print(f"Policy gate correctness: {policy_accuracy:.0%}")
     print(f"Wrote {RESULTS_DIR / 'latest.json'}")
+    return 0 if all(item["action_ok"] and item["policy_ok"] for item in results) else 1
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

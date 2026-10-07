@@ -26,7 +26,6 @@ groups:
         for: 5s
         labels:
           severity: critical
-          service: leaky_service
         annotations:
           summary: "Service target is down"
           description: "Microservice target container is unreachable."

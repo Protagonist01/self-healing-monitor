@@ -1,64 +1,44 @@
-# ADR-002: Model the Healing Pipeline as a LangGraph State Machine
+# ADR-002: LangGraph state machine
 
 ## Status
-Accepted
 
-## Context
-The healing pipeline has multiple sequential steps with conditional branching:
-- Context gathering can partially fail (Loki down, Prometheus timeout) and the pipeline should continue with degraded context rather than abort
-- After diagnosis, the pipeline branches based on confidence and action type
-- Failed auto-executions should retry once before routing to human approval
-- Every state transition must be logged for the audit trail
+Accepted.
 
-This could be implemented as a plain imperative Python function. The question was whether the added structure of a graph-based framework justifies the dependency.
+## Context and decision
 
-## Decision
-Use **LangGraph** to model the pipeline as an explicit directed graph with typed state, named nodes, and conditional edges.
+The workflow has sequential context, diagnosis, and planning steps, followed by a
+policy branch. LangGraph keeps that branch and the retry limit explicit. Each node
+accepts and returns `HealerState`; nodes mutate state and may perform network or
+database operations. Tests mock those effects.
 
-The graph structure:
-
-```
-START
-  │
-  ▼
-context_gather ──(partial failure ok)──▶ diagnose
-                                              │
-                                    ┌─────────┴──────────┐
-                                    ▼                    ▼
-                              (confidence            (confidence
-                               ≥ threshold)           < threshold)
-                                    │                    │
-                                    ▼                    ▼
-                            action_planner         policy_gate
-                                    │               (→ queue)
-                                    ▼
-                              policy_gate
-                                    │
-                          ┌─────────┴──────────┐
-                          ▼                    ▼
-                      executor            approval_queue
-                          │
-                   ┌──────┴──────┐
-                   ▼             ▼
-               (success)     (failure)
-                   │             │
-                   ▼             ▼
-              audit_log    retry → audit_log
+```mermaid
+flowchart TD
+  C[Context gathering] --> D[Diagnosis]
+  D --> P[Action planning]
+  P --> G[Policy gate]
+  G -->|Approval required| Q[Approval queue]
+  G -->|Automatic or notify only| E[Executor]
+  E -->|Failure with retries remaining| R[Prepare retry]
+  R --> E
+  E -->|Otherwise| V[Verify recovery]
+  Q --> A[Audit and outcome]
+  V --> A
 ```
 
-## Consequences
+Human approval is an API path: atomically claim the saved snapshot, execute once,
+verify recovery, and audit the final result. The original policy decision is retained.
+Failed automatic execution retries up to `MAX_AUTO_EXECUTION_RETRIES`, then proceeds
+to verification and audit. Exhausted failures are not automatically put into another
+approval queue.
 
-**Gained:**
-- Each node is a pure function `(state: HealerState) -> HealerState` — independently unit-testable without running the full pipeline
-- Conditional edges make branching logic explicit and auditable — a reviewer reading `graph.py` understands the full flow without reading every node's implementation
-- LangGraph's built-in state checkpointing means the full pipeline state at every node is available for debugging failed incidents
-- Node-level timing is automatically available as a Prometheus metric via a thin wrapper — no manual instrumentation needed
-- Partial failure handling in `context_gather` is a conditional edge, not a try/except buried inside a function — the degraded-context path is visible in the graph
+## Tradeoffs and operational boundaries
 
-**Trade-offs:**
-- Adds `langgraph` dependency for what is ultimately a ~6-node pipeline
-- Contributors unfamiliar with LangGraph need to understand graph concepts before contributing new nodes
-- LangGraph's state serialization adds ~5ms overhead per node transition — negligible for an 8s pipeline but worth noting
+A plain Python function would have fewer framework concepts; the graph makes this
+project's branching workflow easier to inspect and extend. LangGraph adds dependencies
+and a learning cost for contributors. No measured graph-overhead estimate is claimed.
 
-**Mitigation:**
-`docs/architecture.md` includes the graph diagram above with a plain-English description of each node. New nodes can be contributed by following the pattern in any existing node file — the interface is just a typed function signature.
+The graph is compiled without a LangGraph checkpointer. SQL queue and approval tables
+store incident snapshots, not every graph transition. A worker crash quarantines
+interrupted work for review instead of blindly replaying commands. Executor duration
+and total audit duration are recorded; per-node timing metrics are not implemented.
+Missing telemetry is handled inside fetch helpers and reported in state.

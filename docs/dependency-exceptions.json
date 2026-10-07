@@ -1,0 +1,6 @@
+[
+  {"package":"chromadb","version":"1.5.9","id":"PYSEC-2026-311","expires":"2026-11-06","reason":"Server collection API code injection. Embedded PersistentClient only; no Chroma server/API/model-repository configuration. See dependency-security.md."},
+  {"package":"chromadb","version":"1.5.9","id":"PYSEC-2026-3814","expires":"2026-11-06","reason":"Server UPDATE_COLLECTION API code injection. Embedded PersistentClient only; server mode rejected at startup. See dependency-security.md."},
+  {"package":"chromadb","version":"1.5.9","id":"PYSEC-2026-3815","expires":"2026-11-06","reason":"Server RBAC cross-tenant authorization. Single local runbook collection; no Chroma server or tenants exposed. See dependency-security.md."},
+  {"package":"chromadb","version":"1.5.9","id":"PYSEC-2026-3813","expires":"2026-11-06","reason":"Server cross-tenant collection access. Single local runbook collection; no server API. See dependency-security.md."}
+]

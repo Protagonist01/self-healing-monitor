@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   Activity,
@@ -19,6 +19,7 @@ type Health = {
   status: string;
   audit_backend: string;
   rag_embedding: string;
+  demo_enabled: boolean;
 };
 
 type AuditLog = {
@@ -51,18 +52,24 @@ type QueueItem = {
   created_at: string;
 };
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_URL}${path}`, {
-    headers: { "Content-Type": "application/json" },
-    ...init,
-  });
-  if (!response.ok) {
-    throw new Error(`${response.status} ${response.statusText}`);
-  }
-  return response.json();
-}
-
 function App() {
+  const [apiKey, setApiKey] = useState("");
+  const currentApiKey = useRef("");
+  async function request<T>(path: string, init?: RequestInit): Promise<T> {
+    const response = await fetch(`${API_URL}${path}`, {
+      ...init,
+      headers: {
+        "Content-Type": "application/json",
+        ...(apiKey ? { "X-API-Key": apiKey } : {}),
+        ...init?.headers,
+      },
+    });
+    if (!response.ok) {
+      throw new Error(`${response.status} ${response.statusText}`);
+    }
+    return response.json();
+  }
+
   const [health, setHealth] = useState<Health | null>(null);
   const [audit, setAudit] = useState<AuditLog[]>([]);
   const [queue, setQueue] = useState<QueueItem[]>([]);
@@ -72,24 +79,29 @@ function App() {
   const stats = useMemo(() => {
     const resolved = audit.filter((item) => item.alert_resolved).length;
     const queued = queue.length;
-    const auto = audit.filter((item) => item.decision === "auto_execute").length;
+    const auto = audit.filter(
+      (item) => item.decision === "auto_execute",
+    ).length;
     const latestConfidence =
       audit.find((item) => item.confidence !== null)?.confidence ?? null;
     return { resolved, queued, auto, latestConfidence };
   }, [audit, queue]);
 
   async function refresh() {
+    if (apiKey !== currentApiKey.current) return;
     try {
       const [healthData, auditData, queueData] = await Promise.all([
         request<Health>("/health"),
         request<AuditLog[]>("/audit?limit=25"),
         request<QueueItem[]>("/approval/queue"),
       ]);
+      if (apiKey !== currentApiKey.current) return;
       setHealth(healthData);
       setAudit(auditData);
       setQueue(queueData);
       setMessage("Synced");
     } catch (error) {
+      if (apiKey !== currentApiKey.current) return;
       setMessage(error instanceof Error ? error.message : "Unable to sync");
     }
   }
@@ -99,7 +111,11 @@ function App() {
     try {
       await request("/demo/incident", {
         method: "POST",
-        body: JSON.stringify({ service }),
+        body: JSON.stringify({
+          service,
+          alert_name:
+            service === "flaky_service" ? "HighErrorRate" : "HighMemoryUsage",
+        }),
       });
       setMessage(`Demo incident submitted for ${service}`);
       await refresh();
@@ -128,9 +144,12 @@ function App() {
 
   useEffect(() => {
     refresh();
+
     const timer = window.setInterval(refresh, 8000);
-    return () => window.clearInterval(timer);
-  }, []);
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [apiKey]);
 
   return (
     <main className="shell">
@@ -141,33 +160,111 @@ function App() {
         </div>
         <div className="top-actions">
           <span className="status-line">{message}</span>
-          <button className="icon-button" onClick={refresh} aria-label="Refresh">
+          <button
+            className="icon-button"
+            onClick={refresh}
+            aria-label="Refresh"
+          >
             <RefreshCcw size={18} />
           </button>
         </div>
       </header>
 
+      <form
+        className="command-strip"
+        onSubmit={(event) => {
+          event.preventDefault();
+          const form = event.currentTarget;
+          currentApiKey.current = String(
+            new FormData(form).get("apiKey") ?? "",
+          ).trim();
+          setApiKey(currentApiKey.current);
+          setAudit([]);
+          setQueue([]);
+          setHealth(null);
+          form.reset();
+        }}
+      >
+        <label htmlFor="api-key">Operator API key</label>
+        <input
+          id="api-key"
+          name="apiKey"
+          type="password"
+          autoComplete="off"
+          placeholder="Enter key to connect"
+          required
+        />
+        <button type="submit">Connect</button>
+        <button
+          type="button"
+          onClick={() => {
+            currentApiKey.current = "";
+            setApiKey("");
+            setAudit([]);
+            setQueue([]);
+            setHealth(null);
+            setMessage("Disconnected");
+          }}
+        >
+          Disconnect
+        </button>
+      </form>
       <section className="status-grid">
-        <Metric title="API" value={health?.status ?? "offline"} icon={<Activity />} tone={health ? "good" : "warn"} />
-        <Metric title="Audit backend" value={health?.audit_backend ?? "unknown"} icon={<Database />} />
-        <Metric title="Queued" value={String(stats.queued)} icon={<Clock3 />} tone={stats.queued ? "warn" : "good"} />
-        <Metric title="Auto-executed" value={String(stats.auto)} icon={<ShieldCheck />} />
-        <Metric title="Resolved" value={String(stats.resolved)} icon={<CheckCircle2 />} tone="good" />
+        <Metric
+          title="API"
+          value={health?.status ?? "offline"}
+          icon={<Activity />}
+          tone={health ? "good" : "warn"}
+        />
+        <Metric
+          title="Audit backend"
+          value={health?.audit_backend ?? "unknown"}
+          icon={<Database />}
+        />
+        <Metric
+          title="Queued"
+          value={String(stats.queued)}
+          icon={<Clock3 />}
+          tone={stats.queued ? "warn" : "good"}
+        />
+        <Metric
+          title="Auto-executed"
+          value={String(stats.auto)}
+          icon={<ShieldCheck />}
+        />
+        <Metric
+          title="Resolved"
+          value={String(stats.resolved)}
+          icon={<CheckCircle2 />}
+          tone="good"
+        />
         <Metric
           title="Latest confidence"
-          value={stats.latestConfidence === null ? "--" : `${Math.round(stats.latestConfidence * 100)}%`}
+          value={
+            stats.latestConfidence === null
+              ? "--"
+              : `${Math.round(stats.latestConfidence * 100)}%`
+          }
           icon={<AlertTriangle />}
         />
       </section>
 
-      <section className="command-strip">
-        <button disabled={loading} onClick={() => triggerDemo("leaky_service")}>
-          <Play size={16} /> High memory demo
-        </button>
-        <button disabled={loading} onClick={() => triggerDemo("flaky_service")}>
-          <Play size={16} /> Error-rate demo
-        </button>
-      </section>
+      {health?.demo_enabled && (
+        <section className="command-strip">
+          <button
+            disabled={loading}
+            onClick={() => triggerDemo("leaky_service")}
+          >
+            <Play size={16} /> High memory demo
+          </button>
+          <button
+            disabled={loading}
+            onClick={() => triggerDemo("flaky_service")}
+          >
+            <Play size={16} /> Error-rate demo
+          </button>
+        </section>
+      )}
 
       <section className="workspace">
         <div className="panel queue-panel">
@@ -183,14 +280,25 @@ function App() {
                 <article className="queue-item" key={item.id}>
                   <div>
                     <strong>{item.alert_name}</strong>
-                    <p>{item.service} wants {item.action}</p>
+                    <p>
+                      {item.service} wants {item.action}
+                    </p>
                     <small>{item.reasoning}</small>
                   </div>
                   <div className="decision-buttons">
-                    <button onClick={() => decide(item.incident_id, "approved")} aria-label="Approve">
+                    <button
+                      disabled={loading}
+                      onClick={() => decide(item.incident_id, "approved")}
+                      aria-label="Approve"
+                    >
                       <CheckCircle2 size={16} /> Approve
                     </button>
-                    <button className="danger" onClick={() => decide(item.incident_id, "rejected")} aria-label="Reject">
+                    <button
+                      disabled={loading}
+                      className="danger"
+                      onClick={() => decide(item.incident_id, "rejected")}
+                      aria-label="Reject"
+                    >
                       <XCircle size={16} /> Reject
                     </button>
                   </div>
@@ -211,15 +319,21 @@ function App() {
             ) : (
               audit.map((item) => (
                 <article className="audit-row" key={item.id}>
-                  <div className={`signal ${item.alert_resolved ? "resolved" : "open"}`} />
+                  <div
+                    className={`signal ${item.alert_resolved ? "resolved" : "open"}`}
+                  />
                   <div>
                     <div className="row-title">
                       <strong>{item.alert_name}</strong>
                       <span>{item.decision}</span>
                     </div>
-                    <p>{item.record?.diagnosis?.root_cause ?? "No diagnosis recorded"}</p>
+                    <p>
+                      {item.record?.diagnosis?.root_cause ??
+                        "No diagnosis recorded"}
+                    </p>
                     <small>
-                      {item.service} · {item.selected_action ?? "no action"} · {new Date(item.received_at).toLocaleString()}
+                      {item.service} · {item.selected_action ?? "no action"} ·{" "}
+                      {new Date(item.received_at).toLocaleString()}
                     </small>
                   </div>
                 </article>

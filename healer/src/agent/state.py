@@ -1,5 +1,6 @@
 from typing import TypedDict, List, Dict, Any, Optional, NotRequired
 
+
 class AlertData(TypedDict):
     name: str
     service: str
@@ -7,6 +8,7 @@ class AlertData(TypedDict):
     labels: Dict[str, str]
     annotations: Dict[str, str]
     received_at: str
+
 
 class GatheredContext(TypedDict):
     metrics_window_minutes: int
@@ -18,6 +20,8 @@ class GatheredContext(TypedDict):
     recent_deploys: List[str]
     runbook_matched: str
     runbook_excerpt: str
+    correlation: NotRequired[Dict[str, Any]]
+
 
 class DiagnosisData(TypedDict):
     root_cause: str
@@ -26,14 +30,17 @@ class DiagnosisData(TypedDict):
     llm_model: str
     llm_tokens_used: int
 
+
 class PlannedAction(TypedDict):
     action: str  # RESTART_CONTAINER, SCALE_REPLICAS, ROLLBACK_DEPLOY, NOTIFY_ONLY
     impact: str  # low, medium, high
     reasoning: str
 
+
 class PolicyGateDecision(TypedDict):
     decision: str  # auto_execute, human_approval, notify_only
     checks: Dict[str, Any]  # Details of each check
+
 
 class ExecutionData(TypedDict):
     status: str  # success, failure, pending, skipped
@@ -42,6 +49,15 @@ class ExecutionData(TypedDict):
     duration_seconds: Optional[float]
     output: str
     alert_resolved: bool
+
+
+class VerificationData(TypedDict):
+    verified: bool
+    alert_still_firing: bool
+    metrics_after_action: str
+    checked_at: str
+    method: str
+
 
 class HealerState(TypedDict):
     incident_id: str
@@ -52,5 +68,6 @@ class HealerState(TypedDict):
     selected_action: Optional[str]
     policy_gate: Optional[PolicyGateDecision]
     execution: Optional[ExecutionData]
+    verification: NotRequired[Optional[VerificationData]]
     retry_count: NotRequired[int]
     errors: List[str]

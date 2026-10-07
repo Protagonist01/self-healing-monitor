@@ -7,7 +7,8 @@ The project is a local SRE demo stack for receiving Prometheus Alertmanager webh
 ```mermaid
 flowchart TD
   alert["Alertmanager webhook"] --> api["Healer FastAPI API"]
-  api --> context["Context gather"]
+  api --> intake["Durable incident queue"]
+  intake --> context["Context gather"]
   context --> diagnose["Diagnosis"]
   diagnose --> planner["Action planner"]
   planner --> gate["Policy gate"]
@@ -15,7 +16,8 @@ flowchart TD
   gate --> queue["Approval queue"]
   exec --> retry["Prepare retry"]
   retry --> exec
-  exec --> audit["Audit log"]
+  exec --> verify["Verify recovery"]
+  verify --> audit["Audit log"]
   queue --> audit
   audit --> dashboard["Dashboard/API views"]
 ```
@@ -37,7 +39,19 @@ The default Docker Compose mode uses PostgreSQL. For a lighter local API-only ru
 
 ```env
 AUDIT_BACKEND=sqlite
+ENVIRONMENT=development
 SQLITE_PATH=./healer_audit.db
 ```
 
-Without `OPENROUTER_API_KEY`, diagnosis uses a deterministic mock. Without `OPENAI_API_KEY`, runbook retrieval uses local hash embeddings.
+Without `OPENROUTER_API_KEY`, diagnosis reports unavailable at zero confidence. Without `OPENAI_API_KEY`, runbook retrieval uses local hash embeddings.
+
+The diagram omits the dashboard's approval POST: it atomically claims the pending
+snapshot, calls execution and verification, then writes another audit row. Retries
+apply to automatic execution only. Exhausted failures are audited, not re-queued.
+Nodes perform side effects; there is no LangGraph checkpointer, per-node timing
+instrumentation, or live deployment-history provider. SQL stores incident-level state.
+
+Chroma runs embedded. Server mode is rejected at startup; see the
+[dependency security review](dependency-security.md). Recovery requires a healthy
+metric and `timestamp(up)` after command completion. The dashboard polls every
+eight seconds; `/events/stream` is an optional API endpoint.

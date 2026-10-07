@@ -9,20 +9,26 @@ from openai import OpenAI
 
 from healer.src.config import settings
 
+
 class OpenAIEmbeddingFunction(EmbeddingFunction):
+    @staticmethod
+    def name() -> str:
+        return "healer-openai"
+
+    def get_config(self):
+        return {"model_name": self.model_name}
+
     def __init__(self, api_key: str, model_name: str = "text-embedding-3-small"):
-        self.client = OpenAI(api_key=api_key)
+        self.client = OpenAI(api_key=api_key, timeout=30.0, max_retries=1)
         self.model_name = model_name
 
     def __call__(self, input: Documents) -> Embeddings:
         if not input:
             return []
         # Call OpenAI Embeddings API
-        response = self.client.embeddings.create(
-            input=input,
-            model=self.model_name
-        )
+        response = self.client.embeddings.create(input=input, model=self.model_name)
         return [data.embedding for data in response.data]
+
 
 class LocalHashEmbeddingFunction(EmbeddingFunction):
     """
@@ -31,6 +37,18 @@ class LocalHashEmbeddingFunction(EmbeddingFunction):
     It avoids network calls and API-key requirements while still giving ChromaDB
     a stable vector space that rewards shared technical vocabulary.
     """
+
+    @staticmethod
+    def name() -> str:
+        return "healer-local-hash"
+
+    def get_config(self):
+        return {"dimensions": self.dimensions}
+
+    @staticmethod
+    def build_from_config(config):
+        return LocalHashEmbeddingFunction(dimensions=config.get("dimensions", 384))
+
     def __init__(self, dimensions: int = 384):
         self.dimensions = dimensions
 
@@ -54,24 +72,23 @@ class LocalHashEmbeddingFunction(EmbeddingFunction):
         norm = math.sqrt(sum(value * value for value in vector)) or 1.0
         return [value / norm for value in vector]
 
+
 class RunbookIndexer:
     def __init__(self):
         self.chroma_client = chromadb.PersistentClient(path=settings.CHROMA_DB_DIR)
 
         if settings.OPENAI_API_KEY:
             self.embedding_fn = OpenAIEmbeddingFunction(
-                api_key=settings.OPENAI_API_KEY,
-                model_name=settings.EMBEDDING_MODEL
+                api_key=settings.OPENAI_API_KEY, model_name=settings.EMBEDDING_MODEL
             )
         else:
             print("OPENAI_API_KEY not set. Using local hash embeddings for runbook retrieval.")
             self.embedding_fn = LocalHashEmbeddingFunction()
-        
+
         self.collection = self.chroma_client.get_or_create_collection(
-            name="runbooks",
-            embedding_function=self.embedding_fn
+            name="runbooks", embedding_function=self.embedding_fn
         )
-        
+
         # State tracking file to record file hashes
         self.hash_file_path = os.path.join(settings.CHROMA_DB_DIR, "runbooks_hashes.json")
 
@@ -109,20 +126,16 @@ class RunbookIndexer:
         for line in lines:
             if line.startswith("# ") or line.startswith("## "):
                 if current_lines:
-                    chunks.append({
-                        "header": current_header,
-                        "content": "\n".join(current_lines).strip()
-                    })
+                    chunks.append(
+                        {"header": current_header, "content": "\n".join(current_lines).strip()}
+                    )
                     current_lines = []
                 current_header = line.replace("#", "").strip()
             else:
                 current_lines.append(line)
 
         if current_lines:
-            chunks.append({
-                "header": current_header,
-                "content": "\n".join(current_lines).strip()
-            })
+            chunks.append({"header": current_header, "content": "\n".join(current_lines).strip()})
 
         return [c for c in chunks if c["content"]]
 
@@ -148,7 +161,12 @@ class RunbookIndexer:
                 if force or stored_hashes.get(filename) != file_hash:
                     files_to_index.append((filename, filepath))
 
+        deleted = set(stored_hashes) - set(current_hashes)
+        for filename in deleted:
+            self.collection.delete(where={"source": filename})
         if not files_to_index:
+            if deleted:
+                self._save_hashes(current_hashes)
             print("All runbooks are up to date in the index.")
             return
 
@@ -160,7 +178,7 @@ class RunbookIndexer:
 
             # Split markdown into sections
             sections = self._chunk_markdown(content)
-            
+
             # Delete old entries for this file to prevent duplicates
             self.collection.delete(where={"source": filename})
 
@@ -172,21 +190,15 @@ class RunbookIndexer:
             for idx, section in enumerate(sections):
                 chunk_id = f"{filename}#chunk-{idx}"
                 doc_text = f"Runbook: {filename}\nSection: {section['header']}\nContent:\n{section['content']}"
-                
+
                 documents.append(doc_text)
-                metadatas.append({
-                    "source": filename,
-                    "header": section["header"],
-                    "filepath": filepath
-                })
+                metadatas.append(
+                    {"source": filename, "header": section["header"], "filepath": filepath}
+                )
                 ids.append(chunk_id)
 
             if documents:
-                self.collection.add(
-                    documents=documents,
-                    metadatas=metadatas,
-                    ids=ids
-                )
+                self.collection.add(documents=documents, metadatas=metadatas, ids=ids)
 
         self._save_hashes(current_hashes)
         print("Runbook indexing completed successfully.")
@@ -195,27 +207,31 @@ class RunbookIndexer:
         """
         Semantic query to retrieve the top runbook sections.
         """
-        results = self.collection.query(
-            query_texts=[query],
-            n_results=limit
-        )
+        results = self.collection.query(query_texts=[query], n_results=limit)
 
         output = []
         if results and results["documents"] and len(results["documents"]) > 0:
             docs = results["documents"][0]
             metas = results["metadatas"][0]
-            distances = results["distances"][0] if "distances" in results and results["distances"] else [0.0]*len(docs)
+            distances = (
+                results["distances"][0]
+                if "distances" in results and results["distances"]
+                else [0.0] * len(docs)
+            )
             ids = results["ids"][0]
 
             for i in range(len(docs)):
-                output.append({
-                    "id": ids[i],
-                    "document": docs[i],
-                    "metadata": metas[i],
-                    "distance": distances[i]
-                })
+                output.append(
+                    {
+                        "id": ids[i],
+                        "document": docs[i],
+                        "metadata": metas[i],
+                        "distance": distances[i],
+                    }
+                )
 
         return output
+
 
 # Singleton instance
 indexer = RunbookIndexer()

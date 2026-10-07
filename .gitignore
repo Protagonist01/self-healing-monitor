@@ -14,3 +14,26 @@ dashboard/node_modules/
 
 .env
 .DS_Store
+
+# Secrets, local state, generated captures and test outputs
+.env.*
+!.env.example
+.secrets/
+*.db
+*.db-shm
+*.db-wal
+*.sqlite*
+*.log
+.coverage*
+htmlcov/
+coverage/
+output/
+playwright-report/
+test-results/
+.ruff_cache/
+.mypy_cache/
+.playwright-cli/
+# Local publishing drafts (keep finished project documentation in docs/)
+docs/linkedin-post.md
+docs/substack-article.md
+docs/substack-assets/

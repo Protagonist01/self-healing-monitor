@@ -10,6 +10,7 @@
 2. **Dependent Service Down**: Downstream dependencies or database connections timing out.
 
 ## Remediation Steps
-- **Code Bug**: If it's a broken release, trigger an immediate rollback using `ROLLBACK_DEPLOY`.
+- **Code Bug**: Review evidence and use operator tooling for a justified rollback.
+  `ROLLBACK_DEPLOY` is unsupported in this Docker workflow.
 - **Transient State**: Try restarting the service container using `RESTART_CONTAINER` in case of connection pools leakage or deadlocks.
 - **Notification**: Notify the team immediately if downstream dependencies are down.

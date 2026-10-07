@@ -1,96 +1,52 @@
+"""Docker operations restricted to explicitly named containers."""
+
+from typing import Any, Dict
 import docker
-import subprocess
-import os
-from typing import Dict, Any
 from healer.src.config import settings
+
 
 class DockerExecutor:
     def __init__(self):
-        try:
-            # Connect to Docker daemon
-            self.client = docker.from_env()
-        except Exception as e:
-            print(f"Failed to connect to local Docker daemon: {e}. Docker actions will be mocked.")
-            self.client = None
+        self._allowed_services = self._parse_allowed_services()
+        self.client = None
+
+    def _parse_allowed_services(self):
+        return {s.strip() for s in settings.DOCKER_ALLOWED_SERVICES.split(",") if s.strip()}
+
+    def _is_service_allowed(self, service: str) -> bool:
+        return bool(service) and service in self._allowed_services
 
     def restart_container(self, service: str) -> Dict[str, Any]:
-        """
-        Restarts a container matching the service name.
-        """
-        if not self.client:
-            return {
-                "status": "success",
-                "output": f"Docker client disconnected. Mock restarted container for service: '{service}'."
-            }
-
-        try:
-            # List containers and search for matching name/label
-            containers = self.client.containers.list(all=True)
-            matched_container = None
-            for container in containers:
-                if service in container.name:
-                    matched_container = container
-                    break
-
-            if not matched_container:
-                return {
-                    "status": "failure",
-                    "output": f"No running docker container found matching service name '{service}'."
-                }
-
-            print(f"Restarting container: {matched_container.name}...")
-            matched_container.restart()
-            return {
-                "status": "success",
-                "output": f"Container {matched_container.name} restarted successfully."
-            }
-        except Exception as e:
-            print(f"Error restarting container {service}: {e}")
+        if not self._is_service_allowed(service):
             return {
                 "status": "failure",
-                "output": f"Error restarting container: {str(e)}"
+                "output": f"Service '{service}' is not in the DOCKER_ALLOWED_SERVICES allowlist. Action denied.",
             }
+        try:
+            if self.client is None:
+                self.client = docker.DockerClient(base_url=settings.DOCKER_HOST, timeout=15)
+            container = self.client.containers.get(service)
+            # Docker accepts IDs and prefixes too; authorize exact names only.
+            if container.name != service:
+                return {
+                    "status": "failure",
+                    "output": "Docker target did not match the authorized container name.",
+                }
+            container.restart(timeout=10)
+            return {"status": "success", "output": f"Container {service} restarted successfully."}
+        except Exception as exc:
+            return {"status": "failure", "output": f"Docker restart failed: {exc}"}
 
     def scale_replicas(self, service: str, replicas: int = 2) -> Dict[str, Any]:
-        """
-        Scales a service to the target replicas. Uses docker compose scale command if inside docker compose,
-        otherwise uses a mock.
-        """
-        # If compose file exists in standard places, try to use it
-        # Otherwise mock the scale action
-        try:
-            # Try running command line docker compose scale
-            # We look for docker-compose.yml in parent folder (infra)
-            infra_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../infra"))
-            if os.path.exists(os.path.join(infra_dir, "docker-compose.yml")):
-                cmd = f"docker compose -f {infra_dir}/docker-compose.yml up -d --scale {service}={replicas}"
-                print(f"Executing compose scale command: {cmd}")
-                
-                result = subprocess.run(
-                    cmd,
-                    shell=True,
-                    capture_output=True,
-                    text=True,
-                    cwd=infra_dir
-                )
-                
-                if result.returncode == 0:
-                    return {
-                        "status": "success",
-                        "output": f"Scaled service '{service}' to {replicas} replicas via docker-compose."
-                    }
-                else:
-                    return {
-                        "status": "failure",
-                        "output": f"Failed to scale service via compose: {result.stderr}"
-                    }
-        except Exception as e:
-            print(f"Error running docker compose scale: {e}")
-
-        # Fallback/Mock success
+        if not self._is_service_allowed(service):
+            return {
+                "status": "failure",
+                "output": f"Service '{service}' is not in the DOCKER_ALLOWED_SERVICES allowlist. Action denied.",
+            }
         return {
-            "status": "success",
-            "output": f"Mock scaled service '{service}' to {replicas} replicas."
+            "status": "skipped",
+            "output": "Scaling is unsupported for this Docker deployment. Use your deployment tooling.",
         }
+
 
 docker_executor = DockerExecutor()

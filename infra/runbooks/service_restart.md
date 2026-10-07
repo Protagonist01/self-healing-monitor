@@ -11,5 +11,6 @@
 
 ## Remediation Steps
 - **Immediate Action**: Restart the service container using `RESTART_CONTAINER`.
-- **Scaling**: If the container crashed due to overload, scale up using `SCALE_REPLICAS`.
+- **Scaling**: Review capacity and use operator deployment tooling. `SCALE_REPLICAS`
+  is unsupported in this Docker workflow.
 - **Escalation**: If restart fails repeatedly, notify operators.

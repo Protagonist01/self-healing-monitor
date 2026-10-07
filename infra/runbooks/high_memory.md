@@ -2,7 +2,8 @@
 
 ## Symptoms
 - Prometheus alert `HighMemoryUsage` firing.
-- Container memory usage exceeding 90%.
+- The supplied demo alert uses allocated blocks above 60,000,000 bytes. Real
+  services require a working-set metric and their own tested thresholds.
 - Loki logs show repeated `OOMKilled` or `OutOfMemory` errors.
 
 ## Root Cause Diagnosis
@@ -10,6 +11,10 @@
 2. **Traffic Spike**: Temporary surge in memory due to concurrent request spikes. Compare memory usage with request volume metrics.
 
 ## Remediation Steps
-- **Immediate (Safe)**: Restart the container to flush memory. Use the `RESTART_CONTAINER` action. This resolves the immediate outage.
-- **Scaling**: If the memory usage spike is driven by traffic, scale up replicas. Use `SCALE_REPLICAS`.
-- **Permanent Fix**: If a code bug or leak was introduced, rollback the recent deploy using `ROLLBACK_DEPLOY`.
+- **Temporary relief**: An approved `RESTART_CONTAINER` clears the demo's allocated
+  memory. Check fresh telemetry afterwards; a restart may interrupt requests or lose
+  in-memory state and does not fix the underlying leak.
+- **Scaling**: For real traffic pressure, use operator deployment tooling after review.
+  `SCALE_REPLICAS` is unsupported in this Docker workflow.
+- **Permanent fix**: Investigate and repair the code. A justified rollback requires
+  operator tooling; `ROLLBACK_DEPLOY` is unsupported in this Docker workflow.
