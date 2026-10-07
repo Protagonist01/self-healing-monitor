@@ -54,7 +54,9 @@ type QueueItem = {
 
 function App() {
   const [apiKey, setApiKey] = useState("");
+  const [connectionVersion, setConnectionVersion] = useState(0);
   const currentApiKey = useRef("");
+  const connectionGeneration = useRef(0);
   async function request<T>(path: string, init?: RequestInit): Promise<T> {
     const response = await fetch(`${API_URL}${path}`, {
       ...init,
@@ -73,14 +75,16 @@ function App() {
   const [health, setHealth] = useState<Health | null>(null);
   const [audit, setAudit] = useState<AuditLog[]>([]);
   const [queue, setQueue] = useState<QueueItem[]>([]);
-  const [message, setMessage] = useState("Ready");
+  const [message, setMessage] = useState("Connect with an operator API key");
   const [loading, setLoading] = useState(false);
 
   const stats = useMemo(() => {
     const resolved = audit.filter((item) => item.alert_resolved).length;
     const queued = queue.length;
     const auto = audit.filter(
-      (item) => item.decision === "auto_execute",
+      (item) =>
+        item.decision === "auto_execute" &&
+        item.record?.execution?.status === "success",
     ).length;
     const latestConfidence =
       audit.find((item) => item.confidence !== null)?.confidence ?? null;
@@ -88,20 +92,30 @@ function App() {
   }, [audit, queue]);
 
   async function refresh() {
-    if (apiKey !== currentApiKey.current) return;
+    if (!apiKey || apiKey !== currentApiKey.current) return;
+    const generation = connectionGeneration.current;
     try {
       const [healthData, auditData, queueData] = await Promise.all([
         request<Health>("/health"),
         request<AuditLog[]>("/audit?limit=25"),
         request<QueueItem[]>("/approval/queue"),
       ]);
-      if (apiKey !== currentApiKey.current) return;
+      if (
+        apiKey !== currentApiKey.current ||
+        generation !== connectionGeneration.current
+      )
+        return;
       setHealth(healthData);
       setAudit(auditData);
       setQueue(queueData);
       setMessage("Synced");
     } catch (error) {
-      if (apiKey !== currentApiKey.current) return;
+      if (
+        apiKey !== currentApiKey.current ||
+        generation !== connectionGeneration.current
+      )
+        return;
+      setHealth(null);
       setMessage(error instanceof Error ? error.message : "Unable to sync");
     }
   }
@@ -143,13 +157,14 @@ function App() {
   }
 
   useEffect(() => {
+    if (!apiKey) return;
     refresh();
 
     const timer = window.setInterval(refresh, 8000);
     return () => {
       window.clearInterval(timer);
     };
-  }, [apiKey]);
+  }, [apiKey, connectionVersion]);
 
   return (
     <main className="shell">
@@ -178,10 +193,13 @@ function App() {
           currentApiKey.current = String(
             new FormData(form).get("apiKey") ?? "",
           ).trim();
+          connectionGeneration.current += 1;
+          setConnectionVersion(connectionGeneration.current);
           setApiKey(currentApiKey.current);
           setAudit([]);
           setQueue([]);
           setHealth(null);
+          setMessage("Connecting");
           form.reset();
         }}
       >
@@ -199,6 +217,7 @@ function App() {
           type="button"
           onClick={() => {
             currentApiKey.current = "";
+            connectionGeneration.current += 1;
             setApiKey("");
             setAudit([]);
             setQueue([]);
@@ -212,7 +231,7 @@ function App() {
       <section className="status-grid">
         <Metric
           title="API"
-          value={health?.status ?? "offline"}
+          value={health?.status ?? (apiKey ? "offline" : "disconnected")}
           icon={<Activity />}
           tone={health ? "good" : "warn"}
         />
@@ -370,4 +389,8 @@ function Empty({ text }: { text: string }) {
   return <div className="empty">{text}</div>;
 }
 
-createRoot(document.getElementById("root")!).render(<App />);
+const root = createRoot(document.getElementById("root")!);
+root.render(<App />);
+if (import.meta.hot) {
+  import.meta.hot.dispose(() => root.unmount());
+}

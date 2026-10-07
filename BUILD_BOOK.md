@@ -6,6 +6,7 @@ A journal of implementation decisions and verification.
 - [Entry 1 — Make remediation fail safely](#entry-1--make-remediation-fail-safely)
 - [Entry 2 — Separate dependency evidence from code tests](#entry-2--separate-dependency-evidence-from-code-tests)
 - [Entry 3 — Require fresh recovery evidence](#entry-3--require-fresh-recovery-evidence)
+- [Entry 4 — Make file secrets usable by non-root services](#entry-4--make-file-secrets-usable-by-non-root-services)
 
 
 ## Entry 1 — Make remediation fail safely
@@ -113,3 +114,72 @@ count as repairing infrastructure.
 The baseline passed 63 tests. Dependency scans then found a frontend advisory and
 Python advisories missed by the older assessment. Updates and deployment checks are
 in progress; a clean build alone is not evidence of clean dependencies.
+
+## Entry 4 — Make file secrets usable by non-root services
+**Date:** 7 October 2026. **Files touched:** `scripts/init_secrets.py`,
+`healer/tests/unit/test_init_secrets.py`.
+
+### Context
+
+The generator created mode-0600 files owned by the host operator. Compose file secrets
+are bind mounts: the secret's `uid`, `gid`, and `mode` do not remap the source file.
+Grafana and PostgreSQL use other user IDs, so private host files can become unreadable
+inside these services even though the same stack works with Windows bind mounts.
+
+### Before you read on
+
+How can the host protect credential files while separate service users read their mounts?
+
+### Options considered
+
+Running every service as root would avoid the mismatch but discard their normal user
+separation. Chosen: a host directory with mode 0700 and credential files with mode 0644.
+Other host users cannot traverse the private directory. Compose mounts only the needed
+files read-only into each service, where the service user can read them.
+
+### How to build it
+
+1. Put generation in `initialize_secrets(root: Path)` and invoke it only from `__main__`.
+2. Reject symlink directories and files; create the directory and enforce 0700 on POSIX.
+3. Open each credential with `O_CREAT | O_EXCL` so reruns preserve existing contents.
+4. Use 0644 on POSIX credential files, including existing files, to make mounts readable
+   without remapping ownership. Preserve Windows ACL handling; do not claim POSIX modes
+   secure a Windows directory. Keep Windows directory access restricted manually.
+5. Test generation, reruns, absence of credential values in stdout, and POSIX permissions
+   in temporary directories. Reuse generated credentials for container smoke checks.
+
+### Investigation so far
+
+This permission issue was found while reviewing the Linux CI path. The host uses Windows,
+so its successful generation does not prove Linux service access. Linux permission tests
+and actual startup checks are separate evidence.
+
+## Entry 5 — Check the OS inside the deployment images
+**Date:** 7 October 2026. **Files touched:** the four project Dockerfiles,
+`infra/docker-compose.yml`, `.github/workflows/ci.yml`.
+
+### Context
+
+The Python and npm dependency checks do not inspect operating-system packages.
+Trivy reported 50 high/critical fixed vulnerability entries in the original demo
+image, despite its pinned official Python base. Pinning identifies a base precisely;
+it does not keep the packages inside it patched.
+
+### How to build it
+
+1. Build all four images with Compose. Mount the Docker socket and a dedicated cache
+   volume into the pinned Trivy image. Select `--pkg-types os`, `HIGH,CRITICAL`, and
+   `--ignore-unfixed`; use `--exit-code 1` so fixable findings fail CI.
+2. Give the scanner `--timeout 15m`. Its first database download exceeded its default
+   timeout on this host, so the first scan failed before producing a useful result.
+3. Add `apt-get update && apt-get upgrade -y` to each Debian runtime before application
+   layers, then remove package indexes. Use `apk upgrade --no-cache` in the Alpine
+   dashboard image and restore its non-root user after upgrading.
+4. Rebuild and scan the actual resulting images. OS repository updates mean these
+   layers vary with build date; record the built image digest for a release.
+5. Check Prometheus rules with `promtool` and Alertmanager with `amtool`. Use a separate
+   Compose project and alternate localhost ports for smoke testing. Keep existing
+   data volumes intact. Allow PostgreSQL an initialization period before health retries.
+
+The gate covers fixable high/critical OS findings in project images. It does not
+cover every severity, unpatched finding, Python/npm dependency, or third-party service image.

@@ -37,3 +37,9 @@ Its tests prove that new, expired, and wrong-version findings fail the review.
 The lockfiles update `source-map-js`, `multidict`, `oauthlib`, and `urllib3` to
 resolve the fixable findings returned by the scans. Container-image findings and
 live provider quality require their own checks; a Python scan does not cover them.
+
+Project runtime Dockerfiles apply OS updates during builds. CI scans their resulting
+images for fixable high/critical OS vulnerabilities with Trivy. Unpatched and
+lower-severity OS findings, and the supplied third-party telemetry/database images,
+still require release review. Base digests are pinned; package updates depend on
+the build date. Record the resulting image digests when publishing a release.

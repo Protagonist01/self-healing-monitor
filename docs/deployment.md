@@ -21,6 +21,11 @@ the private HTTPS API address. Do not put an API key in a Vite build variable.
 2. Keep `.secrets/` readable only by administrators. Compose mounts credentials in
    the healer, Alertmanager, PostgreSQL, and Grafana as needed. The API accepts the
    operator's `X-API-Key` header and Alertmanager's bearer token.
+
+   On POSIX hosts, the initializer sets the directory to `0700` and files to `0644`.
+   The protected directory restricts host access; readable files let the containers'
+   different service users read their individual read-only secret mounts. On Windows,
+   restrict the directory with filesystem ACLs.
 3. Keep `ENVIRONMENT=production`, `ENABLE_DEMO_ENDPOINT=false`, and
    `REQUIRE_HUMAN_APPROVAL=true`. Production startup rejects a missing/short API key,
    an empty container allowlist, SQLite, or an enabled demo endpoint.

@@ -12,7 +12,11 @@ currently available. [Deployment guide](docs/deployment.md) · [Audit findings](
 
 ## See the project
 
-![Operator dashboard from the original demo](demo_artifacts/01-dashboard-overview.png)
+![Current operator dashboard](demo_artifacts/07-current-dashboard.png)
+
+This October 2026 view shows a synthetic alert on the real local API using SQLite,
+with no LLM provider configured: zero confidence and operator review. No repair was
+executed for this capture.
 
 The original [demo recording](demo_artifacts/self-healing-monitor-demo.webm) and
 [screenshots](demo_artifacts/README.md) show the interface. These historical captures

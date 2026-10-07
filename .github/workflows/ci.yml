@@ -62,7 +62,7 @@ jobs:
       - name: Scan fixed OS vulnerabilities in project images
         run: |
           for image in infra-healer infra-dashboard infra-leaky_service infra-flaky_service; do
-            docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v trivy-cache:/root/.cache/trivy aquasec/trivy:0.75.0@sha256:af6acf9a6b85dfe389a1941505c0ce9efef52a4719635e1a962f022a3d855daa image --scanners vuln --pkg-types os --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 "$image"
+            docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v trivy-cache:/root/.cache/trivy aquasec/trivy:0.75.0@sha256:af6acf9a6b85dfe389a1941505c0ce9efef52a4719635e1a962f022a3d855daa image --scanners vuln --pkg-types os --severity HIGH,CRITICAL --ignore-unfixed --timeout 15m --exit-code 1 "$image"
           done
       - name: Exercise the private stack and disposable restart
         run: |

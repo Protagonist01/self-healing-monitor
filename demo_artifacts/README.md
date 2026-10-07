@@ -1,5 +1,10 @@
 # Demo artifacts
 
+[Current dashboard](07-current-dashboard.png), captured on 7 October 2026 from
+the real local API with SQLite and the live React UI. The alert was synthetic,
+no provider key was configured, and no infrastructure repair was executed.
+Zero confidence and operator review are the actual result of that configuration.
+
 The original June 2026 PNGs, GIF, and WebM are historical interface examples. They
 include mocked diagnoses and predate authentication and fresh recovery verification.
 They are not evidence of the current system's diagnosis quality or safety.
