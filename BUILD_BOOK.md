@@ -183,3 +183,16 @@ it does not keep the packages inside it patched.
 
 The gate covers fixable high/critical OS findings in project images. It does not
 cover every severity, unpatched finding, Python/npm dependency, or third-party service image.
+
+### Verification and dependency follow-through
+
+The updated GitHub run passed all three jobs, including all four OS scans and the
+Alertmanager-to-approval-to-restart smoke test. Windows passed 91 backend tests with
+one POSIX test skipped; the Linux image passed all 92. The local stack separately
+proved fresh recovery, a persisted audit record, and rejection of duplicate approval.
+The browser proved connection, rejection, disconnect clearing, and mobile sizing.
+
+The demo services still had minimum-version requirements. Add small `requirements.in`
+files, pin their three direct dependencies to the healer's tested versions, and compile
+their 14-package lockfiles with `--constraint healer/requirements.txt`. Include these
+locks in `audit_dependencies.py` so future demo-only updates are scanned as well.

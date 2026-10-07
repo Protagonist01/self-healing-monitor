@@ -40,16 +40,27 @@ presented as an accepted production service or a validated autonomous SRE system
 
 | Check | Result |
 | --- | --- |
-| Local backend, Windows/Python 3.13 | 90 tests passed; one upstream deprecation warning |
+| Local backend, Windows/Python 3.13 | 91 tests passed; POSIX permission test skipped; one upstream warning |
+| Backend in Linux/Python 3.11 image | 92 tests passed; one upstream warning |
 | Fixed policy evaluations | 4/4 action selections and 4/4 policy decisions |
 | Python lint and format | Passed |
-| Dashboard build | Passed before final formatting; final build in progress |
+| Dashboard formatting, typecheck, build | Passed |
 | npm audit after updates | Zero reported vulnerabilities |
 | Python dependency review | Fixable findings resolved; four reviewed upstream exceptions |
-| Publish file and common-secret-pattern scan | No forbidden files or matching patterns in publishable files or three existing commits |
+| Publish file and common-secret-pattern scan | No forbidden files or matching patterns in publishable files or Git history |
 | Relative documentation links | Passed |
 | Docker Compose configuration | Passed |
-| Final container/runtime/browser checks | In progress; results will be appended below |
+| Prometheus and Alertmanager configuration validation | Passed using their packaged validation tools |
+| Browser with real development API | Connection, rejection, disconnect clearing, and mobile viewport checks passed |
+| Local private Compose stack | Authentication, scrape targets, and Grafana provisioning passed |
+| Local disposable restart | Alertmanager delivery, approval, real restart, fresh recovery, persisted audit, and duplicate approval denial passed |
+| GitHub container build, image scan, full restart | [All jobs passed at ee85df0](https://github.com/Protagonist01/self-healing-monitor/actions/runs/37558642999) |
+
+The image gate covers fixable high/critical OS vulnerabilities in the four project
+images. The first scan found 50 such entries in the Python demo image; OS updates
+resolved the gate's findings. Unpatched/lower-severity findings and third-party
+telemetry/database images still require release review. Demo Python lockfiles now
+use the healer's tested versions and are included in dependency review.
 
 The secret scan is limited pattern matching, not proof that every possible sensitive
 value is absent. Old demo recordings were retained as historical documentation and
@@ -61,14 +72,17 @@ The public repository has a useful description and relevant topics. At the start
 this audit, `origin/main` was `68b1846`, there were no Actions runs, deployment records,
 releases, or Pages site, and the local improvements had not been pushed. Anonymous
 access could not inspect branch protection; no conclusion is drawn about those settings.
-Changes are being published through a review branch and draft PR, not a main-branch rewrite.
+Changes are published on `codex/recruiter-ready-audit` in
+[PR #1](https://github.com/Protagonist01/self-healing-monitor/pull/1). The default
+branch has not been rewritten. The PR contains the updated recruiter-facing README,
+deployment template, CI checks, and current screenshot.
 
 ## Remaining production work
 
 - Address the [ChromaDB server advisories](dependency-security.md) through an upstream
   fix or reviewed replacement. Embedded-only exceptions expire on 6 November 2026;
   passing the review gate does not mean the package has zero vulnerabilities.
-- Review image scan findings and validate backups, retention, recovery during database
+- Review findings outside the image gate and validate backups, retention, recovery during database
   outages, and representative load. A successful demo restart is not production acceptance.
 - Configure real services, alert-specific verification, a log collector, and an actual
   deployment-history provider. The supplied services are intentionally faulty demos.

@@ -29,6 +29,16 @@ Install the resulting pins and rerun checks before proposing the update. The loc
 includes transitive dependencies; do not replace it with a freeze of a developer's
 unrelated tools. Dashboard dependencies are locked by `dashboard/package-lock.json`.
 
+The two demo services have small input files and complete transitive pins. Regenerate
+them against the healer's tested versions:
+
+```sh
+uv pip compile demo_services/leaky_service/requirements.in --python-version 3.11 --constraint healer/requirements.txt -o demo_services/leaky_service/requirements.txt
+uv pip compile demo_services/flaky_service/requirements.in --python-version 3.11 --constraint healer/requirements.txt -o demo_services/flaky_service/requirements.txt
+```
+
+The dependency review scans all three Python lockfiles.
+
 Base images and telemetry images are pinned by digest. Update the readable tag and
 its matching digest together, then build and run the deployment smoke checks.
 GitHub Actions are pinned to verified commit SHAs, following
